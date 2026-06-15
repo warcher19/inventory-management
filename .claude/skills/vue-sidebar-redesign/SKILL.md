@@ -1,3 +1,34 @@
+---
+name: vue-sidebar-redesign
+description: Redesigns a Vue 3 app's layout from a horizontal top navigation bar to a modern vertical sidebar SaaS layout. Rewrites App.vue with a fixed 240px dark sidebar, vertical nav links with inline SVG icons, and a sticky top bar. Preserves all script logic, composables, modals, and global component styles.
+---
+
+# Vue Sidebar Redesign
+
+Converts a Vue 3 application from a sticky horizontal top-nav layout to a professional SaaS-style vertical sidebar layout. Only `App.vue` and one line in `FilterBar.vue` change — all views, components, composables, and backend code are untouched.
+
+## Discovery — Read These Files First
+
+Before writing a single line, read all five files:
+
+1. `client/src/App.vue` — identify the current template structure and every CSS rule that belongs to nav/layout vs. global component styles
+2. `client/src/components/FilterBar.vue` — find the `top: Npx` value in `.filters-bar` (must change to `top: 0`)
+3. `client/src/components/ProfileMenu.vue` — note the exact class names: `.profile-button`, `.profile-name`, `.chevron`, `.dropdown-menu`
+4. `client/src/components/LanguageSwitcher.vue` — note: `.language-button`, `.language-label`, `.globe-icon`, `.chevron`, `.dropdown-menu`
+5. `client/src/main.js` — confirm all route paths to write accurate `:class="{ active: $route.path === '...' }"` bindings
+
+## What to Preserve Without Any Change
+
+- The **entire `<script>` block** — all imports, `export default`, `components`, `setup()`, refs, computed, async methods, `onMounted`. Do not touch a single line.
+- All **global CSS** from `.page-header` downward: `.page-header`, `.stats-grid`, `.stat-card` (all variants), `.card`, `.card-header`, `.card-title`, `.table-container`, `table`, `thead`, `th`, `td`, `tbody tr`, `.badge` (all variants), `.loading`, `.error`. These are app-wide styles used by every view.
+- The global reset (`*`) and `body` rules.
+- All **modal component APIs**: `ProfileDetailsModal` still takes `:is-open` and `@close`; `TasksModal` still takes `:is-open`, `:tasks`, and emits `@close`, `@add-task`, `@delete-task`, `@toggle-task`.
+
+## Target Template Structure
+
+Replace the entire `<template>` block with this structure:
+
+```html
 <template>
   <div class="app">
     <aside class="sidebar">
@@ -78,7 +109,6 @@
       :is-open="showProfileDetails"
       @close="showProfileDetails = false"
     />
-
     <TasksModal
       :is-open="showTasks"
       :tasks="tasks"
@@ -89,129 +119,32 @@
     />
   </div>
 </template>
+```
 
-<script>
-import { ref, onMounted, computed } from 'vue'
-import { api } from './api'
-import { useAuth } from './composables/useAuth'
-import { useI18n } from './composables/useI18n'
-import FilterBar from './components/FilterBar.vue'
-import ProfileMenu from './components/ProfileMenu.vue'
-import ProfileDetailsModal from './components/ProfileDetailsModal.vue'
-import TasksModal from './components/TasksModal.vue'
-import LanguageSwitcher from './components/LanguageSwitcher.vue'
+## CSS Rules to Remove
 
-export default {
-  name: 'App',
-  components: {
-    FilterBar,
-    ProfileMenu,
-    ProfileDetailsModal,
-    TasksModal,
-    LanguageSwitcher
-  },
-  setup() {
-    const { currentUser } = useAuth()
-    const { t } = useI18n()
-    const showProfileDetails = ref(false)
-    const showTasks = ref(false)
-    const apiTasks = ref([])
+Delete these rules entirely from the `<style>` block — they belong to the old horizontal nav:
 
-    // Merge mock tasks from currentUser with API tasks
-    const tasks = computed(() => {
-      return [...currentUser.value.tasks, ...apiTasks.value]
-    })
+- `.app` (will be replaced)
+- `.top-nav`
+- `.nav-container`
+- `.nav-container > .nav-tabs`
+- `.nav-container > .language-switcher`
+- `.logo`
+- `.logo h1`
+- `.subtitle`
+- `.nav-tabs`
+- `.nav-tabs a`
+- `.nav-tabs a:hover`
+- `.nav-tabs a.active`
+- `.nav-tabs a.active::after`
+- `.main-content` (will be replaced)
 
-    const loadTasks = async () => {
-      try {
-        apiTasks.value = await api.getTasks()
-      } catch (err) {
-        console.error('Failed to load tasks:', err)
-      }
-    }
+## CSS Rules to Add
 
-    const addTask = async (taskData) => {
-      try {
-        const newTask = await api.createTask(taskData)
-        // Add new task to the beginning of the array
-        apiTasks.value.unshift(newTask)
-      } catch (err) {
-        console.error('Failed to add task:', err)
-      }
-    }
+Insert these new layout and sidebar rules between `body {}` and `.page-header {}`:
 
-    const deleteTask = async (taskId) => {
-      try {
-        // Check if it's a mock task (from currentUser)
-        const isMockTask = currentUser.value.tasks.some(t => t.id === taskId)
-
-        if (isMockTask) {
-          // Remove from mock tasks
-          const index = currentUser.value.tasks.findIndex(t => t.id === taskId)
-          if (index !== -1) {
-            currentUser.value.tasks.splice(index, 1)
-          }
-        } else {
-          // Remove from API tasks
-          await api.deleteTask(taskId)
-          apiTasks.value = apiTasks.value.filter(t => t.id !== taskId)
-        }
-      } catch (err) {
-        console.error('Failed to delete task:', err)
-      }
-    }
-
-    const toggleTask = async (taskId) => {
-      try {
-        // Check if it's a mock task (from currentUser)
-        const mockTask = currentUser.value.tasks.find(t => t.id === taskId)
-
-        if (mockTask) {
-          // Toggle mock task status
-          mockTask.status = mockTask.status === 'pending' ? 'completed' : 'pending'
-        } else {
-          // Toggle API task
-          const updatedTask = await api.toggleTask(taskId)
-          const index = apiTasks.value.findIndex(t => t.id === taskId)
-          if (index !== -1) {
-            apiTasks.value[index] = updatedTask
-          }
-        }
-      } catch (err) {
-        console.error('Failed to toggle task:', err)
-      }
-    }
-
-    onMounted(loadTasks)
-
-    return {
-      t,
-      showProfileDetails,
-      showTasks,
-      tasks,
-      addTask,
-      deleteTask,
-      toggleTask
-    }
-  }
-}
-</script>
-
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: #f8fafc;
-  color: #1e293b;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
+```css
 /* ── Layout shell ── */
 .app {
   display: flex;
@@ -230,7 +163,7 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 100;
-  /* No overflow: hidden — footer dropdowns must render outside sidebar bounds */
+  /* No overflow: hidden — dropdowns in the footer must be able to escape the sidebar bounds */
 }
 
 .sidebar-brand {
@@ -380,216 +313,60 @@ body {
   flex: 1;
   padding: 1.5rem 2rem;
 }
+```
 
-/* === App-wide component styles (unchanged) === */
+## FilterBar.vue — One Line Change
 
-.page-header {
-  margin-bottom: 1.5rem;
-}
+In `client/src/components/FilterBar.vue`, find the `.filters-bar` scoped rule and change:
 
-.page-header h2 {
-  font-size: 1.875rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin-bottom: 0.375rem;
-  letter-spacing: -0.025em;
-}
+```css
+/* before */
+top: 70px;
 
-.page-header p {
-  color: #64748b;
-  font-size: 0.938rem;
-}
+/* after */
+top: 0;
+```
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.5rem;
-}
+The original offset compensated for the fixed top-nav header height. In the new layout, FilterBar lives inside `.top-bar` (which is itself sticky at `top: 0`), so FilterBar's own offset must be `0`.
 
-.stat-card {
-  background: white;
-  padding: 1.25rem;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  transition: all 0.2s ease;
-}
+## Icon Design Reference
 
-.stat-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-}
+Each route uses a purpose-fit inline SVG (`stroke="currentColor"`, `18×18`, `stroke-width="1.5"`). Using `currentColor` means icons automatically inherit the link's color on hover and active states — no additional CSS needed.
 
-.stat-label {
-  color: #64748b;
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.625rem;
-}
+| Route | Icon shape |
+|---|---|
+| `/` Dashboard | 2×2 grid of small squares |
+| `/inventory` | Rectangle with horizontal ruled lines |
+| `/orders` | Three lines of decreasing width |
+| `/spending` | Circle with dollar sign stroke |
+| `/demand` | Upward-trending polyline |
+| `/reports` | Document rectangle with ruled lines |
 
-.stat-value {
-  font-size: 2.25rem;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.025em;
-}
+## Active Link Pattern
 
-.stat-card.warning .stat-value {
-  color: #ea580c;
-}
+The old layout used `::after` to draw a 2px underline along the bottom edge of a horizontal link. That pattern has no meaning in a vertical nav. The replacement is a `::before` left-edge stripe:
 
-.stat-card.success .stat-value {
-  color: #059669;
-}
+- `width: 3px`, `height: 60%` — a pill that fills most of the link height
+- `left: 0`, vertically centered with `top: 50%; transform: translateY(-50%)`
+- `border-radius: 0 2px 2px 0` — flush on left, rounded on right
+- Color `#3b82f6` (blue-500) on a `rgba(37, 99, 235, 0.35)` tinted background
 
-.stat-card.danger .stat-value {
-  color: #dc2626;
-}
+This is the standard SaaS sidebar active indicator (used by Notion, Linear, Vercel).
 
-.stat-card.info .stat-value {
-  color: #2563eb;
-}
+## Dropdown Specificity Notes
 
-.card {
-  background: white;
-  border-radius: 10px;
-  padding: 1.25rem;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 1.25rem;
-}
+Both `ProfileMenu` and `LanguageSwitcher` use `<style scoped>`, so their `.dropdown-menu` rules are compiled as `.dropdown-menu[data-v-xxx]` (specificity 0,2,0). App.vue uses unscoped `<style>`, so `.sidebar-footer .profile-menu .dropdown-menu` has specificity (0,3,0) and wins without `!important`. For the button color overrides, `!important` is used as a safety net since the scoped attribute selector and the parent selector have equal specificity and cascade order is build-tool-dependent.
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.875rem;
-  border-bottom: 1px solid #e2e8f0;
-}
+Do NOT add `overflow: hidden` to `.sidebar`. Without it, the absolute-positioned dropdowns can render outside the sidebar's box, which is required.
 
-.card-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.025em;
-}
+## Verification Checklist
 
-.table-container {
-  overflow-x: auto;
-}
+After applying the redesign, check each item:
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-thead {
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-th {
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  font-weight: 600;
-  color: #475569;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-td {
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid #f1f5f9;
-  color: #334155;
-  font-size: 0.875rem;
-}
-
-tbody tr {
-  transition: background-color 0.15s ease;
-}
-
-tbody tr:hover {
-  background: #f8fafc;
-}
-
-.badge {
-  display: inline-block;
-  padding: 0.313rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-}
-
-.badge.success {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.badge.warning {
-  background: #fed7aa;
-  color: #92400e;
-}
-
-.badge.danger {
-  background: #fecaca;
-  color: #991b1b;
-}
-
-.badge.info {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.badge.increasing {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.badge.decreasing {
-  background: #fecaca;
-  color: #991b1b;
-}
-
-.badge.stable {
-  background: #e0e7ff;
-  color: #3730a3;
-}
-
-.badge.high {
-  background: #fecaca;
-  color: #991b1b;
-}
-
-.badge.medium {
-  background: #fed7aa;
-  color: #92400e;
-}
-
-.badge.low {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.loading {
-  text-align: center;
-  padding: 3rem;
-  color: #64748b;
-  font-size: 0.938rem;
-}
-
-.error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 1rem;
-  border-radius: 8px;
-  margin: 1rem 0;
-  font-size: 0.938rem;
-}
-</style>
+1. **All 6 routes render** — click each sidebar link, confirm the view loads and the active stripe updates
+2. **Active state is exclusive** — only one link shows the stripe at a time; the Dashboard link (`/`) does not stay active when on `/inventory` (the explicit `$route.path === '/'` check prevents this)
+3. **FilterBar is sticky below the viewport top** — scroll a long page; the filter bar sticks to the top of the main area, not the top of the browser window
+4. **ProfileMenu dropdown opens upward** — click the profile button in the sidebar footer; confirm the dropdown opens above, not below (which would clip behind the viewport bottom)
+5. **LanguageSwitcher dropdown opens upward** — same test; confirm locale label changes after switching
+6. **Modals overlay the full viewport** — open ProfileDetailsModal and TasksModal; confirm they cover the sidebar as well (they teleport to `<body>`, so no layout changes needed)
+7. **No horizontal scrollbar** — the sidebar (240px fixed) + main-wrapper (margin-left: 240px) should fill exactly 100vw
